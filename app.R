@@ -18,7 +18,7 @@
 # Authors: Francisco J. Romero-Campero
 # 
 # Contact: Francisco J. Romero-Campero - fran@us.es 
-# Date: October 2018
+# Date: November 2018
 
 ## Load libraries
 library(shiny)
