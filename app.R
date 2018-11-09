@@ -1195,7 +1195,7 @@ server <- function(input, output, session) {
           href.chlamy.go.names <- vector(length=length(chlamy.go.names))
           for(k in 1:length(chlamy.go.names))
           {
-            url.chlamy.gene <- paste("http://www.phytozome.net/genePage.php?db=Phytozome&crown&method=0&search=1&detail=1&searchText=locusname%3A",chlamy.go.names[k],sep="")
+            url.chlamy.gene <- paste("https://phytozome.jgi.doe.gov/pz/portal.html#!results?search=0&crown=1&star=1&method=4614&searchText=",chlamy.go.names[k],sep="")
             href.chlamy.go.names[k] <- paste(c("<a href=\"",url.chlamy.gene,"\" target=\"_blank\">",chlamy.go.names[k],"</a>"),collapse="")
           }
           
@@ -1211,7 +1211,7 @@ server <- function(input, output, session) {
         # Adding link to the GO id column
         for(i in 1:length(sig.go.terms))
         {
-          go.url <- paste("http://amigo.geneontology.org/cgi-bin/amigo/term-details.cgi?term=",sig.go.terms[i],sep="")
+          go.url <- paste("http://amigo.geneontology.org/amigo/term/",sig.go.terms[i],sep="")
           go.href <- paste(c("<a href=\"",go.url,"\" target=\"_blank\">",sig.go.terms[i],"<a>"),collapse="")
           go.links[i] <- go.href
         }
