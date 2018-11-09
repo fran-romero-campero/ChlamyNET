@@ -197,7 +197,7 @@ ui <- fluidPage(
                                         label = "PFAM Protein Domain ID",
                                         choices = pfam,
                                         selected = "PF00643,PF06203",#"PF00010",
-                                        multiple = FALSE),
+                                        multiple = TRUE),
                          ## Action button to trigger identification of genes with the selected
                          ## PFAM ID
                          actionButton(inputId = "go_pfam",label="Search Genes")),
@@ -318,7 +318,7 @@ server <- function(input, output, session) {
   ## Gene selection by PFAM
   selected_gene_pfam <- eventReactive(input$go_pfam,{
     ## Extract x and y position for the selected gene
-    pfam_selection <- subset(network.data, pfam == input$selected_pfam)
+    pfam_selection <- subset(network.data, pfam %in% input$selected_pfam)
     pfam_genes_selected <<- pfam_selection$name
     #print("selection:")
     #print(pfam_genes_selected)
@@ -327,7 +327,7 @@ server <- function(input, output, session) {
   
   ## Reactive to determine selected genes with a given PFAM ID
   my_pfam_genes <- reactive({
-    pfam_selection <- subset(network.data, pfam == input$selected_pfam)
+    pfam_selection <- subset(network.data, pfam %in% input$selected_pfam)
     pfam_genes_selected <<- pfam_selection$name
     return(pfam_genes_selected)
   })
@@ -791,7 +791,7 @@ server <- function(input, output, session) {
       
       output$output_table <- renderDataTable({
         as.data.frame(genes.annotation.data.with.links)
-      },escape=TRUE)
+      },escape=FALSE)
       
     })
   
@@ -910,9 +910,12 @@ server <- function(input, output, session) {
              xlab="",ylab="",lwd=3,axes=FALSE) #,tick=FALSE,labels=FALSE
         
         ## The rest of the lines to be added to the graph started in the previous line
-        for(k in 2:nrow(genes.data))
+        if(nrow(genes.data) > 1)
         {
-          lines(genes.data[k,],type="l",col=line.colors[k],lwd=3)
+          for(k in 2:nrow(genes.data))
+          {
+            lines(genes.data[k,],type="l",col=line.colors[k],lwd=3)
+          }
         }
         
         ## Add info on the axis
