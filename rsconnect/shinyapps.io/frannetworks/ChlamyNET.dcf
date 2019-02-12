@@ -1,0 +1,12 @@
+name: ChlamyNET
+title: ChlamyNET
+username:
+account: frannetworks
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 564306
+bundleId: 1694509
+url: https://frannetworks.shinyapps.io/ChlamyNET/
+when: 1541951518.40251
+asMultiple: FALSE
+asStatic: FALSE

@@ -18,7 +18,7 @@
 # Authors: Francisco J. Romero-Campero
 # 
 # Contact: Francisco J. Romero-Campero - fran@us.es 
-# Date: November 2018
+# Date: February 2019
 
 ## Load libraries
 library(shiny)
@@ -170,7 +170,7 @@ ui <- fluidPage(
         ## using gene ID (CreXX.gXXXXXX) or PFAM ID (PFXXXXX)
         radioButtons(inputId = "gene_selection_mode",
                     label = "Mode", 
-                     choices = c("Gene ID", "Protein Domain PFAM ID"),
+                     choices = c("Gene ID", "Protein Domain PFAM ID","Gene List"),
                      selected = "Gene ID"),
         
         ## Dynamic panel for selecting genes based on their ID
@@ -189,6 +189,24 @@ ui <- fluidPage(
                                      multiple = FALSE),
                          ## Button to trigger selections based on gene ID
                          actionButton(inputId = "button_gene_id",label="Select Genes")),
+        
+        conditionalPanel(condition = "input.gene_selection_mode == 'Gene List'",
+                         ## Enter gene list
+                         textAreaInput(inputId = "gene.list", label= "Set of genes", width="90%", 
+                                       height = "200px",placeholder = "Insert set of genes",
+                                       value = "Cre01.g011150
+Cre04.g224600
+Cre07.g332250
+Cre14.g620850"),
+                         ## Select distance of genes to consider
+                         selectInput(inputId = "distance_gene_list", 
+                                     label = "Select Co-expressed Genes at Distance:", 
+                                     choices = 0:3,
+                                     selected = 0,
+                                     multiple = FALSE),
+                         ## Button to trigger selections based on gene ID
+                         actionButton(inputId = "button_gene_list_id",label="Select Genes")),
+        
         
         ## Dynamic panel for selecting genes based on their PFAM domain IDs
         conditionalPanel(condition = "input.gene_selection_mode == 'Protein Domain PFAM ID'",
@@ -310,11 +328,34 @@ server <- function(input, output, session) {
                        nodes[as.vector(ego(graph = chlamynet,nodes = target.gene[i],order=input$distance)[[1]])])
       }
       selection <- unique(selection)
-      print(selection)
+      #print(selection)
       #subset(network.data, name %in% nodes[as.vector(ego(graph = chlamynet,nodes = target.gene,order=input$distance)[[1]])])
       subset(network.data, name %in% selection)
   })
 
+  ## Reactive responding to gene list selection by ID when clicking button_gene_list_id
+  selected_gene_list_id <- eventReactive(input$button_gene_list_id,{
+    target.gene.list <- as.vector(unlist(
+      strsplit(input$gene.list, split="\n",
+               fixed = TRUE)[1]))
+      
+    selection <- c()
+    genes.not.chlamynet <- setdiff(x = target.gene.list, y = network.data$name)
+    target.gene.list <- intersect(target.gene.list,network.data$name)
+    
+    for(i in 1:length(target.gene.list))
+    {
+      selection <- c(selection,
+                     nodes[as.vector(ego(graph = chlamynet,nodes = target.gene.list[i],order=input$distance_gene_list)[[1]])])
+    }
+    selection <- unique(selection)
+    #print(paste("distance:",input$distance_gene_list))
+    #print(selection)
+    #subset(network.data, name %in% nodes[as.vector(ego(graph = chlamynet,nodes = target.gene,order=input$distance)[[1]])])
+    subset(network.data, name %in% selection)
+  })
+  
+  
   ## Gene selection by PFAM
   selected_gene_pfam <- eventReactive(input$go_pfam,{
     ## Extract x and y position for the selected gene
@@ -355,7 +396,7 @@ server <- function(input, output, session) {
 
   ## Visualization of selected genes by ID
   observeEvent(input$button_gene_id, {
-        print("aquí")
+        #print("aquí")
         #print(selected_gene_id())
         gene.list <<- selected_gene_id()$name
         output$networkPlot <- renderPlot({
@@ -561,9 +602,245 @@ server <- function(input, output, session) {
         
     })
 
+## ---------------------------------------
+  
+  ## Visualization of selected genes by ID
+  observeEvent(input$button_gene_list_id, {
+    #print("aquí con lista")
+    #print(selected_gene_id())
+    gene.list <<- selected_gene_list_id()$name
+    output$networkPlot <- renderPlot({
+      ggplot(network.data, aes(x,y)) + 
+        theme(panel.background = element_blank(), 
+              panel.grid.major = element_blank(), 
+              panel.grid.minor = element_blank(),
+              axis.title = element_blank(),
+              axis.text = element_blank(),
+              axis.ticks.y = element_blank()) + 
+        geom_point(color=network.data$color,size=1) + 
+        geom_point(data=selected_gene_list_id(), aes(x,y), size=3, fill=selected_gene_list_id()$color,colour="black",pch=21) 
+    })
+    
+    ## Generate annotation table
+    genes.annotation.data <- subset(annotation.data, V1 %in% gene.list)
+    
+    colnames(genes.annotation.data) <- c("Gene id", "PFAM", "PANTHER", "KOG", "EC", "K", "Arabidopsis", "Common name", "Description")
+    genes.annotation.data <- genes.annotation.data[c("Gene id", "Description", "Common name", "Arabidopsis", "PFAM", "PANTHER", "KOG", "EC", "K")]
+
+    target.gene.list <- as.vector(unlist(
+      strsplit(input$gene.list, split="\n",
+               fixed = TRUE)[1]))
+    
+    genes.not.chlamynet <- setdiff(x = target.gene.list, y = network.data$name)
+    
+        
+    if(length(genes.not.chlamynet) > 0)
+    {
+      msg <- paste(c("The following genes are not in ChlamyNET: ", genes.not.chlamynet, 
+                     ". Check if the IDs are correct and correspond to Chlamydomonas reinhardtii annotation v5. Alternatively, these genes may not be differentially expressed in the conditions integrated in ChlamyNET."),collapse=" ")
+    } else
+    {
+      msg <- ""
+    }
+    
+    output$message <- renderUI({
+      tagList(
+        tags$p(tags$b(msg)), 
+        tags$p(tags$b("The table below presents the annotation of the selected genes.
+                      This information can be downloaded by clicking on the following button:")),
+        tags$br())
+    })
+    
+    output$download <- renderUI({
+      tagList(
+        downloadButton(outputId= "downloadData", "Get Selected Genes Annotation"),
+        tags$br(),
+        tags$br()
+      )
+    })
+    
+    output$downloadData <- downloadHandler(
+      filename = function() 
+      {
+        return('selected_genes_annotation.txt')
+      },
+      content = function(file) {
+        write.table(as.data.frame(genes.annotation.data), file=file, sep="\t",quote=FALSE )
+      })
+    
+    
+    ## Construct data frame with links
+    
+    genes.ids <- as.vector(genes.annotation.data[["Gene id"]])
+    genes.pfam <- as.vector(genes.annotation.data[["PFAM"]])
+    genes.kog <- as.vector(genes.annotation.data[["KOG"]])
+    genes.ec <- as.vector(genes.annotation.data[["EC"]])
+    genes.k <- as.vector(genes.annotation.data[["K"]])
+    genes.pthr <- as.vector(genes.annotation.data[["PANTHER"]])
+    
+    genes.with.links <- vector(mode="character",length=length(genes.ids))
+    genes.pfam.with.links <- vector(mode="character",length=length(genes.pfam))
+    genes.kog.with.links <- vector(mode="character",length=length(genes.kog))
+    genes.ec.with.links <-  vector(mode="character",length=length(genes.ec))
+    genes.k.with.links <- vector(mode="character",length=length(genes.ec))
+    genes.pthr.with.links <- vector(mode="character",length=length(genes.pthr))
+    
+    for(i in 1:length(genes.ids))
+    {
+      current.gene <- genes.ids[i]
+      
+      current.phytozome.link <- paste0("https://phytozome.jgi.doe.gov/pz/portal.html#!results?search=0&crown=1&star=1&method=4614&searchText=",
+                                       current.gene,
+                                       "&offset=0")
+      
+      phytozome.href <- paste(c("<a href=\"",
+                                current.phytozome.link,
+                                "\" target=\"_blank\">Phytozome</a>"),
+                              collapse="")
+      
+      current.circadianet.link <- paste0("http://viridiplantae.ibvf.csic.es/circadiaNet/genes/cre/",
+                                         current.gene,
+                                         ".html")
+      
+      
+      circadianet.href <- paste(c("<a href=\"",
+                                  current.circadianet.link,
+                                  "\" target=\"_blank\">CircadiaNET</a>"),
+                                collapse="")
+      
+      new.gene.id.element <- paste(c(current.gene,
+                                     paste(phytozome.href,
+                                           circadianet.href,sep=",")),collapse = " ")
+      
+      current.pfam <- genes.pfam[i]
+      
+      if(current.pfam != "")
+      {
+        pfams.ids <- strsplit(current.pfam,split=",")[[1]]
+        pfam.href <- vector(mode="character",length=length(pfams.ids))
+        
+        for(j in 1:length(pfams.ids))
+        {
+          pfam.link <- paste0("https://pfam.xfam.org/family/",pfams.ids[j])
+          
+          pfam.href[j] <- paste(c("<a href=\"",
+                                  pfam.link,
+                                  "\" target=\"_blank\">",
+                                  pfams.ids[j], "</a>"),
+                                collapse="")
+        }
+        pfams.hrefs <- paste(pfam.href,collapse=",")
+      } else
+      {
+        pfams.hrefs <- ""
+      }
+      
+      
+      ## Create kog links
+      current.kog <- genes.kog[i]
+      
+      if(current.kog != "")
+      {
+        kog.link <- paste0("http://eggnogdb.embl.de/#/app/results?seqid=Q6CPW9&target_nogs=",
+                           current.kog)
+        kog.href <- paste(c("<a href=\"",
+                            kog.link,
+                            "\" target=\"_blank\">",
+                            current.kog, "</a>"),
+                          collapse="")
+      } else
+      {
+        kog.href <- ""
+      }
+      
+      ## Create ec link
+      current.ec <- genes.ec[i]
+      
+      if(current.ec != "")
+      {
+        ec.link <- paste0("https://www.genome.jp/dbget-bin/www_bget?ec:",
+                          current.ec)
+        ec.href <- paste(c("<a href=\"",
+                           ec.link,
+                           "\" target=\"_blank\">",
+                           current.ec, "</a>"),
+                         collapse="")
+      } else
+      {
+        ec.href <- ""
+      }
+      
+      ## Create k link
+      current.k <- genes.k[i]
+      
+      if(current.k != "")
+      {
+        k.link <- paste0("https://www.genome.jp/dbget-bin/www_bget?ko:",
+                         current.k)
+        k.href <- paste(c("<a href=\"",
+                          k.link,
+                          "\" target=\"_blank\">",
+                          current.k, "</a>"),
+                        collapse="")
+      } else
+      {
+        k.href <- ""
+      }
+      
+      ## Create pthr link
+      current.pthr <- genes.pthr[i]
+      
+      if(current.pthr != "")
+      {
+        pthr.link <- paste0("http://www.pantherdb.org/panther/family.do?clsAccession=",
+                            current.pthr)
+        pthr.href <- paste(c("<a href=\"",
+                             pthr.link,
+                             "\" target=\"_blank\">",
+                             current.pthr, "</a>"),
+                           collapse="")
+      } else
+      {
+        pthr.href <- ""
+      }
+      
+      genes.with.links[i] <- new.gene.id.element
+      genes.pfam.with.links[i] <- pfams.hrefs
+      genes.kog.with.links[i] <- kog.href
+      genes.ec.with.links[i] <- ec.href
+      genes.k.with.links[i] <- k.href
+      genes.pthr.with.links[i] <- pthr.href
+    } 
+    
+    genes.annotation.data.with.links <- 
+      data.frame(genes.with.links,
+                 genes.annotation.data[,2:4],
+                 genes.pfam.with.links,
+                 genes.pthr.with.links,
+                 genes.kog.with.links,
+                 genes.ec.with.links,
+                 genes.k.with.links)
+    
+    colnames(genes.annotation.data.with.links) <- colnames(genes.annotation.data)
+    
+    output$output_table <- renderDataTable({
+      as.data.frame(genes.annotation.data.with.links)
+    },escape=FALSE)
+    
+  })
+  
+  
+  
+  
+  
+## ---------------------------------------
+  
+  
+  
+  
   ## Visualization of identified genes with the given PFAM domains
   observeEvent(input$go_pfam, {
-      print("pfam")
+      #print("pfam")
       #print(selected_gene_pfam())
       gene.list <<- selected_gene_pfam()$name
       output$networkPlot <- renderPlot({
@@ -798,7 +1075,7 @@ server <- function(input, output, session) {
     
     ## Generate Heatmap
     observeEvent(eventExpr = input$button_heatmap, {
-      print("Generate heatmap")
+      #print("Generate heatmap")
       #gene.list <- selected.gene.pos()$name
       #print("Selected genes:")
       #print(gene.list)
@@ -855,7 +1132,7 @@ server <- function(input, output, session) {
     
     ## Generate line graph 
     observeEvent(eventExpr = input$button_linegraph,{
-      print("line graph")
+      #print("line graph")
       #gene.list <- selected_gene_pfam()$name
       #print("Selected pfam genes")
       #print(gene.list)
@@ -949,14 +1226,14 @@ server <- function(input, output, session) {
     ## GO enrichment
     observeEvent(input$go_enrichment,{
       
-      print("go:")
-      print(input$go_mode)
+      #print("go:")
+      #print(input$go_mode)
       ## Selected genes
       cre.gene.names <- gene.list
       
       if(input$go_mode == "Based on PFAM Annotation")
       {
-        print("pfam")
+        #print("pfam")
         ## Set the background gene set to the whole gene set in Chlamy 
         ## We create a vector with all elements 1 and name it with the gene 
         ## identifiers 
@@ -1053,7 +1330,7 @@ server <- function(input, output, session) {
          gene.href <- vector(length=length(chlamy.genes))
          for(j in 1:length(chlamy.genes))
            {
-           gene.url <- paste("https://phytozome.jgi.doe.gov/pz/portal.html#!results?search=0&crown=1&star=1&method=4614&searchText=",chlamy.genes[j],sep="")
+           # gene.url <- paste("https://phytozome.jgi.doe.gov/pz/portal.html#!results?search=0&crown=1&star=1&method=4614&searchText=",chlamy.genes[j],sep="")
            gene.href[j] <- paste(c("<a href=\"",gene.url,"\" target=\"_blank\">",chlamy.genes[j],"</a>"),collapse="")
          }
         
@@ -1108,7 +1385,7 @@ server <- function(input, output, session) {
         
       } else if(input$go_mode == "Based on Arabidopsis orthology")
       {
-        print("Arabidopsis orthology")
+        #print("Arabidopsis orthology")
         ## Set the background gene set to the whole gene set in A. thaliana 
         ## We create a vector with all elements 1 and name it with the gene 
         ## identifiers 
@@ -1128,7 +1405,7 @@ server <- function(input, output, session) {
         ## associated to our genes of interest
         gene.background[ath.gene.names] <- 0
         
-        print("apply topGO")
+        #print("apply topGO")
         
         ## Construct the topGOdata object
         sampleGOdata <- new("topGOdata",
